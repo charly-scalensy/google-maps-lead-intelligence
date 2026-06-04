@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Google Maps Lead Intelligence</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-inner">
+    <div class="header-brand">
+      <span class="header-icon">📍</span>
+      <div>
+        <h1 class="header-title">Google Maps Lead Intelligence</h1>
+        <p class="header-subtitle">Scraping · Scoring · Priorisation des leads</p>
+      </div>
+    </div>
+    <form method="post" action="/clear">
+      <button class="btn btn-ghost" type="submit"
+        onclick="return confirm('Vider toutes les données ?')">
+        🗑 Vider la base
+      </button>
+    </form>
+  </div>
+</header>
+
+<!-- STATUS BAR -->
+{% if status %}
+<div class="status-bar {% if status.running %}status-running{% else %}status-idle{% endif %}">
+  {% if status.running %}<span class="spinner"></span>{% endif %}
+  {{ status.message }}
+  {% if status.running %}
+    <small>(Rechargez la page dans quelques secondes…)</small>
+  {% endif %}
+</div>
+{% endif %}
+
+<main class="container">
+
+  <!-- SCRAPING FORM -->
+  <section class="card form-card">
+    <h2 class="section-title">🔍 Lancer un scraping</h2>
+    <form method="post" action="/run-scraping" class="scraping-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="query">Requête Google Maps</label>
+          <input id="query" name="query" type="text" required
+            placeholder="ex: restaurant Paris 11, plombier Lyon…" />
+        </div>
+        <div class="form-group">
+          <label for="industry">Secteur</label>
+          <input id="industry" name="industry" type="text" required
+            placeholder="ex: Restaurant, Plomberie, Hôtel…" />
+        </div>
+        <div class="form-group form-group--sm">
+          <label for="max_results">Nb max de résultats</label>
+          <input id="max_results" name="max_results" type="number"
+            value="10" min="1" max="50" />
+        </div>
+        <div class="form-group form-group--action">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary" type="submit"
+            {% if status.running %}disabled{% endif %}>
+            {% if status.running %}⏳ En cours…{% else %}▶ Run scraping{% endif %}
+          </button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- KPI CARDS -->
+  <section class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-value">{{ analytics.total }}</div>
+      <div class="kpi-label">Établissements</div>
+    </div>
+    <div class="kpi-card kpi-card--high">
+      <div class="kpi-value">{{ analytics.high_priority }}</div>
+      <div class="kpi-label">Leads High Priority</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value">
+        {% if analytics.avg_rating %}{{ analytics.avg_rating }} ★{% else %}—{% endif %}
+      </div>
+      <div class="kpi-label">Note moyenne</div>
+    </div>
+  </section>
+
+  {% if analytics.total > 0 %}
+
+  <!-- TOP NEGATIVE KEYWORDS -->
+  {% if analytics.top_keywords %}
+  <section class="card">
+    <h2 class="section-title">⚠️ Top mots-clés négatifs détectés</h2>
+    <div class="tags-list">
+      {% for kw in analytics.top_keywords %}
+        <span class="tag tag--neg">{{ kw }}</span>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- CROSS-INDUSTRY VIEW -->
+  {% if analytics.by_industry %}
+  <section class="card">
+    <h2 class="section-title">🏭 Vue cross-industrie</h2>
+    <table class="table industry-table">
+      <thead>
+        <tr>
+          <th>Secteur</th>
+          <th>Total</th>
+          <th>High</th>
+          <th>Medium</th>
+          <th>Low</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for industry, stats in analytics.by_industry.items() %}
+        <tr>
+          <td><strong>{{ industry }}</strong></td>
+          <td>{{ stats.count }}</td>
+          <td><span class="badge badge--high">{{ stats.high }}</span></td>
+          <td><span class="badge badge--medium">{{ stats.medium }}</span></td>
+          <td><span class="badge badge--low">{{ stats.low }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  <!-- LEADS TABLE -->
+  <section class="card">
+    <h2 class="section-title">📋 Tableau des leads ({{ analytics.total }})</h2>
+    <div class="table-wrapper">
+      <table class="table leads-table">
+        <thead>
+          <tr>
+            <th>Nom</th>
+            <th>Secteur</th>
+            <th>Note</th>
+            <th>Avis</th>
+            <th>Téléphone</th>
+            <th>Site web</th>
+            <th>Mots-clés négatifs</th>
+            <th>Score</th>
+            <th>Priorité</th>
+            <th>Angle commercial</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for place in places %}
+          <tr class="row--{{ place.priority_label | lower }}">
+            <td class="cell-name">
+              {% if place.maps_url %}
+                <a href="{{ place.maps_url }}" target="_blank">{{ place.name or '—' }}</a>
+              {% else %}
+                {{ place.name or '—' }}
+              {% endif %}
+              {% if place.address %}
+                <div class="cell-sub">{{ place.address }}</div>
+              {% endif %}
+            </td>
+            <td>{{ place.industry or '—' }}</td>
+            <td>
+              {% if place.rating %}
+                <span class="rating {% if place.rating < 3.8 %}rating--low{% endif %}">
+                  {{ place.rating }} ★
+                </span>
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ place.review_count or '—' }}</td>
+            <td>
+              {% if place.phone %}
+                <a href="tel:{{ place.phone }}">{{ place.phone }}</a>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if place.website %}
+                <a href="{{ place.website }}" target="_blank" class="link-truncate">
+                  🌐 Site
+                </a>
+              {% else %}—{% endif %}
+            </td>
+            <td class="cell-keywords">
+              {% if place.negative_keywords %}
+                {% for kw in place.negative_keywords[:4] %}
+                  <span class="tag tag--neg tag--sm">{{ kw }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="cell-score">{{ place.priority_score }}</td>
+            <td>
+              <span class="badge badge--{{ place.priority_label | lower }}">
+                {{ place.priority_label }}
+              </span>
+            </td>
+            <td class="cell-angle">{{ place.recommended_angle or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% else %}
+  <section class="empty-state">
+    <div class="empty-icon">📭</div>
+    <p>Aucun lead pour l'instant. Lancez un scraping ci-dessus.</p>
+  </section>
+  {% endif %}
+
+</main>
+
+<footer class="footer">
+  <p>Google Maps Lead Intelligence · Propulsé par FastAPI &amp; Playwright</p>
+</footer>
+
+</body>
+</html>
