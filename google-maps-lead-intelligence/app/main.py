@@ -37,19 +37,35 @@ def _run_scraping(query: str, industry: str, max_results: int):
         _status = {"running": False, "message": f"Erreur : {exc}"}
 
 
+@app.get("/debug")
+def debug():
+    import os
+    return {
+        "base_dir": str(BASE_DIR),
+        "templates_exists": (BASE_DIR / "templates").exists(),
+        "static_exists": (BASE_DIR / "static").exists(),
+        "db_path": str(BASE_DIR / "places.db"),
+        "cwd": os.getcwd(),
+    }
+
+
 @app.get("/")
 def home(request: Request):
-    places = get_places()
-    analytics = compute_analytics(places)
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-            "places": places,
-            "analytics": analytics,
-            "status": _status,
-        },
-    )
+    import traceback
+    try:
+        places = get_places()
+        analytics = compute_analytics(places)
+        return templates.TemplateResponse(
+            "index.html",
+            {
+                "request": request,
+                "places": places,
+                "analytics": analytics,
+                "status": _status,
+            },
+        )
+    except Exception as exc:
+        return {"error": str(exc), "traceback": traceback.format_exc()}
 
 
 @app.post("/run-scraping")
